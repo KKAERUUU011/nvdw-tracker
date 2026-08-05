@@ -193,6 +193,7 @@
       <div class="label">累計分配金</div>
       <div class="value" id="sumDist">$0.00</div>
       <div class="sub" id="sumDistCount">0回受取</div>
+      <div class="sub" id="sumDistRecovery">回収率 —</div>
     </div>
     <div class="card wide">
       <div class="label">USD/JPY 換算レート(手入力)</div>
@@ -382,6 +383,15 @@ function renderSummary(){
 
   document.getElementById('sumDist').textContent = `$${fmt2(totalDist())}`;
   document.getElementById('sumDistCount').textContent = `${state.dists.length}回受取`;
+
+  const recEl = document.getElementById('sumDistRecovery');
+  const cost = totalCost();
+  if(cost>0){
+    const recoveryPct = totalDist()/cost*100;
+    recEl.textContent = `回収率 ${recoveryPct.toFixed(2)}% (元本比)`;
+  } else {
+    recEl.textContent = '回収率 —';
+  }
 
   const fx = document.getElementById('fxRate').value;
   const jpyPrev = document.getElementById('jpyPreview');
