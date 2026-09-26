@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14171C">
+<title>NVDW通帳</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NVDW通帳">
+<style>
+  :root{
+    --ink:#14171C;
+    --surface:#1D2129;
+    --surface-2:#242933;
+    --line:#2C323D;
+    --paper:#E8ECE9;
+    --muted:#8A93A0;
+    --copper:#C4632B;
+    --copper-soft:#4A3226;
+    --teal:#2E6E62;
+    --crimson:#9B3A3A;
+    --radius:14px;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Roboto Mono", monospace;
+    --sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--paper);font-family:var(--sans);}
+  body{
+    padding-bottom:56px;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  a{color:inherit;}
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px;}
+
+  header.top{
+    padding:28px 16px 18px;
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgba(196,98,43,0.16), transparent 55%),
+      var(--ink);
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:5;
+    backdrop-filter: blur(6px);
+  }
+  header.top .row{display:flex; align-items:baseline; justify-content:space-between; max-width:520px; margin:0 auto;}
+  header.top h1{
+    font-size:20px; margin:0; letter-spacing:0.02em; font-weight:700;
+  }
+  header.top .ticker{
+    font-family:var(--mono); font-size:11px; color:var(--copper);
+    letter-spacing:0.12em; text-transform:uppercase; margin-top:2px; display:block;
+  }
+  header.top .clock{font-family:var(--mono); font-size:11px; color:var(--muted);}
+
+  .cards{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:18px;
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px;
+  }
+  .card.wide{grid-column:1/-1;}
+  .card .label{font-size:11px; color:var(--muted); letter-spacing:0.04em;}
+  .card .value{font-family:var(--mono); font-size:22px; margin-top:6px; font-variant-numeric:tabular-nums;}
+  .card .sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:4px;}
+  .pos{color:var(--teal);}
+  .neg{color:var(--crimson);}
+
+  section{margin-top:26px;}
+  .section-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;}
+  .section-head h2{font-size:14px; margin:0; letter-spacing:0.04em; color:var(--paper);}
+  .section-head .hint{font-size:11px; color:var(--muted);}
+
+  /* Weekly payday grid — signature element */
+  .payday-scroll{overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch;}
+  .payday-grid{
+    display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,16px); gap:3px;
+    width:max-content; padding:2px;
+  }
+  .payday-cell{
+    width:16px; height:16px; border-radius:4px; background:var(--surface-2);
+    border:1px solid var(--line);
+    position:relative;
+  }
+  .payday-cell[data-level="1"]{background:#3a2a1e; border-color:#4a3226;}
+  .payday-cell[data-level="2"]{background:#6b3f21; border-color:#7a4a26;}
+  .payday-cell[data-level="3"]{background:#a2531f; border-color:#b45f22;}
+  .payday-cell[data-level="4"]{background:var(--copper); border-color:#d97b3d;}
+  .payday-legend{display:flex; align-items:center; gap:6px; margin-top:8px; font-size:10px; color:var(--muted); font-family:var(--mono);}
+  .payday-legend .sw{width:11px; height:11px; border-radius:3px; display:inline-block;}
+
+  canvas#navChart{width:100%; height:180px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); display:block;}
+
+  .tabs{display:flex; gap:6px; margin-bottom:12px;}
+  .tab{
+    flex:1; text-align:center; padding:9px 4px; border-radius:10px; font-size:12px;
+    background:var(--surface); border:1px solid var(--line); color:var(--muted); cursor:pointer;
+  }
+  .tab.active{background:var(--copper-soft); color:var(--copper); border-color:#5a3d2c; font-weight:700;}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .form{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11px; color:var(--muted); margin-bottom:5px;}
+  .field input, .field select{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    padding:10px 11px; border-radius:9px; font-size:14px; font-family:var(--mono);
+  }
+  .field input:focus, .field select:focus{outline:none; border-color:var(--copper);}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .btn{
+    width:100%; padding:12px; border-radius:10px; border:none; background:var(--copper);
+    color:#1a1006; font-weight:700; font-size:14px; cursor:pointer; letter-spacing:0.02em;
+  }
+  .btn:active{opacity:0.85;}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--paper); font-weight:500;}
+  .btn.small{padding:8px; font-size:12px;}
+
+  .log-sort{display:flex; gap:6px; margin-bottom:10px;}
+  .sort-btn{
+    padding:6px 12px; border-radius:8px; font-size:11px; background:var(--surface);
+    border:1px solid var(--line); color:var(--muted); cursor:pointer;
+  }
+  .sort-btn.active{background:var(--copper-soft); color:var(--copper); border-color:#5a3d2c; font-weight:700;}
+
+  .log-list{display:flex; flex-direction:column;}
+  .log-row{padding:10px 4px; border-bottom:1px solid var(--line);}
+  .log-row:last-child{border-bottom:none;}
+  .log-row-top{display:flex; align-items:center; gap:8px;}
+  .log-date{font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
+  .log-content{
+    font-family:var(--mono); font-size:12.5px; margin-top:4px; padding-left:1px;
+    word-break:break-word;
+  }
+  .kind-tag{
+    font-size:9.5px; padding:3px 7px; border-radius:5px; font-family:var(--sans);
+    letter-spacing:0.02em; white-space:nowrap; flex-shrink:0;
+  }
+  .kind-buy{background:#213244; color:#7fb0e0;}
+  .kind-dist{background:var(--copper-soft); color:var(--copper);}
+  .kind-nav{background:#25302a; color:#6fae95;}
+  .del-btn{
+    background:none; border:none; color:var(--muted); font-size:15px; cursor:pointer;
+    padding:0 2px; margin-left:auto; flex-shrink:0;
+  }
+  .empty{text-align:center; color:var(--muted); font-size:12px; padding:24px 0;}
+
+  .post-box{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px;
+  }
+  .post-box textarea{
+    width:100%; min-height:140px; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:9px; padding:12px; font-family:var(--sans); font-size:13.5px; line-height:1.6; resize:vertical;
+  }
+  .post-actions{display:flex; gap:8px; margin-top:10px;}
+  .post-actions .btn{flex:1;}
+
+  .rate-inline{display:flex; align-items:center; gap:8px; margin-top:6px;}
+  .rate-inline input{width:90px;}
+  .rate-inline span{font-size:11px; color:var(--muted);}
+
+  footer{margin-top:34px; text-align:center; font-size:11px; color:var(--muted); font-family:var(--mono);}
+  footer .btn.small{width:auto; display:inline-block; margin:4px;}
+
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:var(--paper); color:var(--ink); padding:10px 18px; border-radius:20px;
+    font-size:12.5px; opacity:0; pointer-events:none; transition:opacity .25s ease, bottom .25s ease;
+    z-index:50;
+  }
+  .toast.show{opacity:1; bottom:36px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="row">
+    <div>
+      <h1>NVDW通帳</h1>
+      <span class="ticker">Roundhill NVDA WeeklyPay ETF</span>
+    </div>
+    <div class="clock" id="clock">--</div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">保有口数</div>
+      <div class="value" id="sumShares">0.000</div>
+      <div class="sub" id="sumSharesUsd">$0.00 取得</div>
+    </div>
+    <div class="card">
+      <div class="label">平均取得単価</div>
+      <div class="value" id="sumAvgCost">$0.00</div>
+      <div class="sub" id="sumLatestNav">直近基準価額 —</div>
+    </div>
+    <div class="card">
+      <div class="label">評価損益</div>
+      <div class="value" id="sumPnl">$0.00</div>
+      <div class="sub" id="sumPnlPct">0.00%</div>
+    </div>
+    <div class="card">
+      <div class="label">累計分配金</div>
+      <div class="value" id="sumDist">$0.00</div>
+      <div class="sub" id="sumDistCount">0回受取</div>
+      <div class="sub" id="sumDistRecovery">回収率 —</div>
+    </div>
+    <div class="card wide">
+      <div class="label">USD/JPY 換算レート(手入力)</div>
+      <div class="rate-inline">
+        <input type="number" id="fxRate" step="0.01" placeholder="例: 152.30">
+        <span id="jpyPreview">— 評価額(円換算): —</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <div class="section-head">
+      <h2>週次配当カレンダー</h2>
+      <span class="hint">濃いほど1口あたりの分配額が高い</span>
+    </div>
+    <div class="payday-scroll">
+      <div class="payday-grid" id="paydayGrid"></div>
+    </div>
+    <div class="payday-legend">
+      <span id="paydayLegendMin">少</span>
+      <span class="sw" style="background:var(--surface-2); border:1px solid var(--line);"></span>
+      <span class="sw" style="background:#3a2a1e;"></span>
+      <span class="sw" style="background:#6b3f21;"></span>
+      <span class="sw" style="background:#a2531f;"></span>
+      <span class="sw" style="background:var(--copper);"></span>
+      <span id="paydayLegendMax">多</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>基準価額の推移</h2>
+      <span class="hint">タップ点 = 分配日</span>
+    </div>
+    <canvas id="navChart" width="600" height="360"></canvas>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>記録する</h2></div>
+    <div class="tabs">
+      <div class="tab active" data-panel="panelBuy">購入</div>
+      <div class="tab" data-panel="panelDist">分配金</div>
+      <div class="tab" data-panel="panelNav">基準価額</div>
+    </div>
+
+    <div class="panel active" id="panelBuy">
+      <div class="form">
+        <div class="field"><label>購入日</label><input type="date" id="buyDate"></div>
+        <div class="row2">
+          <div class="field"><label>口数(株)</label><input type="number" id="buyShares" step="0.0001" placeholder="10"></div>
+          <div class="field"><label>単価(USD)</label><input type="number" id="buyPrice" step="0.01" placeholder="33.50"></div>
+        </div>
+        <div class="field"><label>手数料(USD・任意)</label><input type="number" id="buyFee" step="0.01" placeholder="0"></div>
+        <button class="btn" onclick="addBuy()">購入を記録</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panelDist">
+      <div class="form">
+        <div class="field"><label>分配日</label><input type="date" id="distDate"></div>
+        <div class="row2">
+          <div class="field"><label>1口あたり分配金(USD)</label><input type="number" id="distPerShare" step="0.0001" placeholder="0.42"></div>
+          <div class="field"><label>受取口数</label><input type="number" id="distShares" step="0.0001" placeholder="自動: 保有口数"></div>
+        </div>
+        <button class="btn" onclick="addDist()">分配金を記録</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panelNav">
+      <div class="form">
+        <div class="field"><label>更新日</label><input type="date" id="navDate"></div>
+        <div class="field"><label>基準価額(USD)</label><input type="number" id="navPrice" step="0.01" placeholder="34.00"></div>
+        <button class="btn" onclick="addNav()">基準価額を記録</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>X投稿ドラフト</h2>
+      <span class="hint">直近データから自動生成</span>
+    </div>
+    <div class="post-box">
+      <textarea id="postDraft" readonly></textarea>
+      <div class="post-actions">
+        <button class="btn ghost" onclick="regenPost()">再生成</button>
+        <button class="btn" onclick="copyPost()">コピー</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>記録一覧</h2>
+      <span class="hint" id="logCount">0件</span>
+    </div>
+    <div class="log-sort">
+      <div class="sort-btn active" data-sort="date">日付順</div>
+      <div class="sort-btn" data-sort="kind">種別順</div>
+    </div>
+    <div class="form" style="padding:4px 10px;">
+      <div class="log-list" id="logList"></div>
+      <div class="empty" id="logEmpty">まだ記録がありません</div>
+    </div>
+  </section>
+
+  <footer>
+    <div>
+      <button class="btn small ghost" onclick="exportData()">JSONエクスポート</button>
+      <button class="btn small ghost" onclick="document.getElementById('importFile').click()">インポート</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+    </div>
+    <div style="margin-top:8px;">データは端末内(localStorage)のみに保存されます</div>
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- storage ---------- */
+const STORE_KEY = "nvdwTracker.v1";
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return { buys:[], dists:[], navs:[], fx:null };
+    const d = JSON.parse(raw);
+    return { buys:d.buys||[], dists:d.dists||[], navs:d.navs||[], fx:d.fx||null };
+  }catch(e){ return { buys:[], dists:[], navs:[], fx:null }; }
+}
+function saveData(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+let state = loadData();
+
+/* ---------- helpers ---------- */
+const fmt2 = n => (Math.round(n*100)/100).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmt4 = n => (Math.round(n*10000)/10000).toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4});
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+function totalShares(){
+  return state.buys.reduce((s,b)=>s+Number(b.shares),0);
+}
+function totalCost(){
+  return state.buys.reduce((s,b)=>s+Number(b.shares)*Number(b.price)+Number(b.fee||0),0);
+}
+function avgCost(){
+  const sh = totalShares();
+  return sh>0 ? totalCost()/sh : 0;
+}
+function latestNav(){
+  if(state.navs.length===0) return null;
+  const sorted=[...state.navs].sort((a,b)=>a.date.localeCompare(b.date));
+  return sorted[sorted.length-1];
+}
+function totalDist(){
+  return state.dists.reduce((s,d)=>s+Number(d.perShare)*Number(d.shares),0);
+}
+
+/* ---------- rendering: summary ---------- */
+function renderSummary(){
+  const sh = totalShares();
+  document.getElementById('sumShares').textContent = fmt4(sh);
+  document.getElementById('sumSharesUsd').textContent = `$${fmt2(totalCost())} 取得`;
+
+  const ac = avgCost();
+  document.getElementById('sumAvgCost').textContent = sh>0 ? `$${fmt2(ac)}` : '—';
+
+  const nav = latestNav();
+  document.getElementById('sumLatestNav').textContent = nav ? `直近基準価額 $${fmt2(nav.price)} (${nav.date})` : '直近基準価額 —';
+
+  const pnlEl = document.getElementById('sumPnl');
+  const pnlPctEl = document.getElementById('sumPnlPct');
+  if(nav && sh>0){
+    const evalTotal = nav.price*sh;
+    const pnl = evalTotal - totalCost();
+    const pnlPct = totalCost()>0 ? (pnl/totalCost()*100) : 0;
+    pnlEl.textContent = (pnl>=0?'+':'') + `$${fmt2(pnl)}`;
+    pnlEl.className = 'value ' + (pnl>=0?'pos':'neg');
+    pnlPctEl.textContent = (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%';
+  } else {
+    pnlEl.textContent = '—'; pnlEl.className='value';
+    pnlPctEl.textContent = '評価には基準価額の登録が必要';
+  }
+
+  document.getElementById('sumDist').textContent = `$${fmt2(totalDist())}`;
+  document.getElementById('sumDistCount').textContent = `${state.dists.length}回受取`;
+
+  const recEl = document.getElementById('sumDistRecovery');
+  const cost = totalCost();
+  if(cost>0){
+    const recoveryPct = totalDist()/cost*100;
+    recEl.textContent = `回収率 ${recoveryPct.toFixed(2)}% (元本比)`;
+  } else {
+    recEl.textContent = '回収率 —';
+  }
+
+  const fx = document.getElementById('fxRate').value;
+  const jpyPrev = document.getElementById('jpyPreview');
+  if(fx && nav && sh>0){
+    const jpy = nav.price*sh*Number(fx);
+    jpyPrev.textContent = `評価額(円換算): ¥${Math.round(jpy).toLocaleString('ja-JP')}`;
+  } else if(fx && sh>0){
+    jpyPrev.textContent = `為替のみ設定済(基準価額未登録)`;
+  } else {
+    jpyPrev.textContent = '— 評価額(円換算): —';
+  }
+}
+
+/* ---------- weekly payday grid ---------- */
+function renderPayday(){
+  const grid = document.getElementById('paydayGrid');
+  grid.innerHTML = '';
+  const legendMin = document.getElementById('paydayLegendMin');
+  const legendMax = document.getElementById('paydayLegendMax');
+  if(state.dists.length===0){
+    const p = document.createElement('div');
+    p.style.cssText='font-size:11px;color:var(--muted);padding:20px 0;';
+    p.textContent = '分配金を記録すると週次カレンダーが表示されます';
+    grid.appendChild(p);
+    legendMin.textContent = '少';
+    legendMax.textContent = '多';
+    return;
+  }
+  const sorted = [...state.dists].sort((a,b)=>a.date.localeCompare(b.date));
+  const start = new Date(sorted[0].date);
+  const startSun = new Date(start); startSun.setDate(start.getDate()-start.getDay());
+  const end = new Date(); // through today
+  // 1口あたりの分配額(perShare)を週ごとに集計 — 保有口数の変動に左右されない目安値
+  const perShareByWeekStart = {};
+  sorted.forEach(d=>{
+    const dt = new Date(d.date);
+    const sun = new Date(dt); sun.setDate(dt.getDate()-dt.getDay());
+    const key = sun.toISOString().slice(0,10);
+    perShareByWeekStart[key] = (perShareByWeekStart[key]||0) + Number(d.perShare);
+  });
+  const values = Object.values(perShareByWeekStart);
+  const min = values.length ? Math.min(...values) : 0;
+  const max = values.length ? Math.max(...values) : 0;
+  const range = (max-min)||1;
+  function levelFor(v){
+    if(!v) return 0;
+    const r = (v-min)/range;
+    if(r>0.75) return 4;
+    if(r>0.5) return 3;
+    if(r>0.25) return 2;
+    return 1;
+  }
+  legendMin.textContent = `$${fmt4(min)}`;
+  legendMax.textContent = `$${fmt4(max)}`;
+
+  let cursor = new Date(startSun);
+  const cells = [];
+  while(cursor <= end){
+    const key = cursor.toISOString().slice(0,10);
+    const val = perShareByWeekStart[key]||0;
+    cells.push({date:key, val});
+    cursor.setDate(cursor.getDate()+7);
+  }
+  cells.forEach(c=>{
+    const cell = document.createElement('div');
+    cell.className='payday-cell';
+    cell.setAttribute('data-level', levelFor(c.val));
+    cell.title = c.val ? `週${c.date}〜: 1口あたり $${fmt4(c.val)}` : `週${c.date}〜: 分配なし`;
+    grid.appendChild(cell);
+  });
+  grid.parentElement.scrollLeft = grid.scrollWidth;
+}
+
+/* ---------- chart ---------- */
+function renderChart(){
+  const canvas = document.getElementById('navChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const navs = [...state.navs].sort((a,b)=>a.date.localeCompare(b.date));
+  const distDates = new Set(state.dists.map(d=>d.date));
+
+  const pad = {l:50,r:16,t:16,b:28};
+  if(navs.length===0){
+    ctx.fillStyle = getCss('--muted');
+    ctx.font='12px sans-serif';
+    ctx.fillText('基準価額を記録するとグラフが表示されます', pad.l, H/2);
+    return;
+  }
+  const prices = navs.map(n=>Number(n.price));
+  const minP = Math.min(...prices), maxP = Math.max(...prices);
+  const rangeP = (maxP-minP)||1;
+  const x = i => pad.l + (i/(Math.max(navs.length-1,1)))*(W-pad.l-pad.r);
+  const y = p => pad.t + (1-((p-minP)/rangeP))*(H-pad.t-pad.b);
+
+  // grid lines
+  ctx.strokeStyle = getCss('--line');
+  ctx.lineWidth = 1;
+  for(let i=0;i<=3;i++){
+    const yy = pad.t + i*(H-pad.t-pad.b)/3;
+    ctx.beginPath(); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); ctx.stroke();
+    const val = maxP - i*rangeP/3;
+    ctx.fillStyle = getCss('--muted'); ctx.font='10px monospace';
+    ctx.fillText('$'+val.toFixed(1), 4, yy+3);
+  }
+
+  // line
+  ctx.beginPath();
+  navs.forEach((n,i)=>{
+    const px=x(i), py=y(Number(n.price));
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  });
+  ctx.strokeStyle = getCss('--copper');
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // fill under line
+  const lastIdx = navs.length-1;
+  ctx.lineTo(x(lastIdx), H-pad.b);
+  ctx.lineTo(x(0), H-pad.b);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(196,98,43,0.12)';
+  ctx.fill();
+
+  // points, highlight distribution dates
+  navs.forEach((n,i)=>{
+    const px=x(i), py=y(Number(n.price));
+    ctx.beginPath();
+    ctx.arc(px,py, distDates.has(n.date)?4:2.5, 0, Math.PI*2);
+    ctx.fillStyle = distDates.has(n.date) ? getCss('--teal') : getCss('--copper');
+    ctx.fill();
+  });
+
+  // x labels (first/last)
+  ctx.fillStyle = getCss('--muted'); ctx.font='10px monospace';
+  ctx.fillText(navs[0].date, pad.l, H-8);
+  const lastLabel = navs[lastIdx].date;
+  ctx.fillText(lastLabel, W-pad.r-lastLabel.length*5.5, H-8);
+}
+function getCss(varName){
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+/* ---------- log list ---------- */
+let logSortMode = 'date';
+const kindOrder = {buy:0, dist:1, nav:2};
+const kindLabel = {buy:'購入', dist:'分配', nav:'基準価額'};
+const kindClass = {buy:'kind-buy', dist:'kind-dist', nav:'kind-nav'};
+
+function renderLog(){
+  const list = document.getElementById('logList');
+  list.innerHTML='';
+  const rows = [
+    ...state.buys.map(b=>({date:b.date, kind:'buy', id:b.id, text:`${fmt4(b.shares)}口 @ $${fmt2(b.price)}${b.fee?` (手数料$${fmt2(b.fee)})`:''}`})),
+    ...state.dists.map(d=>({date:d.date, kind:'dist', id:d.id, text:`$${fmt4(d.perShare)}/口 × ${fmt4(d.shares)}口 = $${fmt2(d.perShare*d.shares)}`})),
+    ...state.navs.map(n=>({date:n.date, kind:'nav', id:n.id, text:`基準価額 $${fmt2(n.price)}`})),
+  ];
+
+  if(logSortMode === 'kind'){
+    rows.sort((a,b)=> kindOrder[a.kind]-kindOrder[b.kind] || b.date.localeCompare(a.date));
+  } else {
+    rows.sort((a,b)=> b.date.localeCompare(a.date));
+  }
+
+  document.getElementById('logCount').textContent = `${rows.length}件`;
+  document.getElementById('logEmpty').style.display = rows.length? 'none':'block';
+
+  rows.forEach(r=>{
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `
+      <div class="log-row-top">
+        <span class="log-date">${r.date}</span>
+        <span class="kind-tag ${kindClass[r.kind]}">${kindLabel[r.kind]}</span>
+        <button class="del-btn" onclick="deleteEntry('${r.kind}','${r.id}')">✕</button>
+      </div>
+      <div class="log-content">${r.text}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+document.querySelectorAll('.sort-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    logSortMode = btn.dataset.sort;
+    renderLog();
+  });
+});
+function deleteEntry(kind, id){
+  const map = {buy:'buys', dist:'dists', nav:'navs'};
+  state[map[kind]] = state[map[kind]].filter(x=>x.id!==id);
+  saveData();
+  renderAll();
+}
+
+/* ---------- add entries ---------- */
+function addBuy(){
+  const date = document.getElementById('buyDate').value || todayStr();
+  const shares = Number(document.getElementById('buyShares').value);
+  const price = Number(document.getElementById('buyPrice').value);
+  const fee = Number(document.getElementById('buyFee').value||0);
+  if(!shares || !price){ showToast('口数と単価を入力してください'); return; }
+  state.buys.push({id:uid(), date, shares, price, fee});
+  saveData();
+  document.getElementById('buyShares').value='';
+  document.getElementById('buyPrice').value='';
+  document.getElementById('buyFee').value='';
+  showToast('購入を記録しました');
+  renderAll();
+}
+function addDist(){
+  const date = document.getElementById('distDate').value || todayStr();
+  const perShare = Number(document.getElementById('distPerShare').value);
+  const sharesInput = document.getElementById('distShares').value;
+  const shares = sharesInput ? Number(sharesInput) : totalShares();
+  if(!perShare || !shares){ showToast('1口あたり分配金を入力してください'); return; }
+  state.dists.push({id:uid(), date, perShare, shares});
+  saveData();
+  document.getElementById('distPerShare').value='';
+  document.getElementById('distShares').value='';
+  showToast('分配金を記録しました');
+  renderAll();
+}
+function addNav(){
+  const date = document.getElementById('navDate').value || todayStr();
+  const price = Number(document.getElementById('navPrice').value);
+  if(!price){ showToast('基準価額を入力してください'); return; }
+  const existing = state.navs.find(n=>n.date===date);
+  if(existing){ existing.price = price; } else { state.navs.push({id:uid(), date, price}); }
+  saveData();
+  document.getElementById('navPrice').value='';
+  showToast('基準価額を記録しました');
+  renderAll();
+}
+
+/* ---------- X post draft ---------- */
+function buildPost(){
+  const sh = totalShares();
+  const nav = latestNav();
+  const sortedDist = [...state.dists].sort((a,b)=>b.date.localeCompare(a.date));
+  const lastDist = sortedDist[0];
+  const lines = [];
+  lines.push(`【NVDW週次記録】`);
+  if(lastDist){
+    lines.push(`分配金: $${fmt4(lastDist.perShare)}/口 (${lastDist.date})`);
+  }
+  if(nav){
+    lines.push(`基準価額: $${fmt2(nav.price)} (${nav.date})`);
+  }
+  lines.push(`保有: ${fmt4(sh)}口 / 平均取得単価 $${fmt2(avgCost())}`);
+  if(nav && sh>0){
+    const pnl = nav.price*sh - totalCost();
+    const pnlPct = totalCost()>0 ? pnl/totalCost()*100 : 0;
+    lines.push(`評価損益: ${pnl>=0?'+':''}$${fmt2(pnl)} (${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%)`);
+  }
+  lines.push(`累計分配金: $${fmt2(totalDist())}`);
+  lines.push(`#NVDW #RoundhillETF #米国株`);
+  return lines.join('\n');
+}
+function regenPost(){
+  document.getElementById('postDraft').value = buildPost();
+}
+function copyPost(){
+  const ta = document.getElementById('postDraft');
+  ta.select();
+  navigator.clipboard?.writeText(ta.value).then(()=>showToast('コピーしました')).catch(()=>{
+    document.execCommand('copy'); showToast('コピーしました');
+  });
+}
+
+/* ---------- export / import ---------- */
+function exportData(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `nvdw-tracker-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importData(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const d = JSON.parse(reader.result);
+      state = { buys:d.buys||[], dists:d.dists||[], navs:d.navs||[], fx:d.fx||null };
+      saveData();
+      renderAll();
+      showToast('インポートしました');
+    }catch(e){ showToast('読み込みに失敗しました'); }
+  };
+  reader.readAsText(file);
+  evt.target.value='';
+}
+
+/* ---------- toast ---------- */
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.panel).classList.add('active');
+  });
+});
+
+/* ---------- fx ---------- */
+document.getElementById('fxRate').addEventListener('input', e=>{
+  state.fx = e.target.value ? Number(e.target.value) : null;
+  saveData();
+  renderSummary();
+});
+
+/* ---------- clock ---------- */
+function tickClock(){
+  const d = new Date();
+  document.getElementById('clock').textContent = d.toLocaleString('ja-JP', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+tickClock(); setInterval(tickClock, 30000);
+
+/* ---------- init ---------- */
+function renderAll(){
+  renderSummary();
+  renderPayday();
+  renderChart();
+  renderLog();
+  regenPost();
+}
+if(state.fx) document.getElementById('fxRate').value = state.fx;
+renderAll();
+
+/* ---------- default dates ---------- */
+['buyDate','distDate','navDate'].forEach(id=>{
+  document.getElementById(id).value = todayStr();
+});
+
+/* ---------- service worker ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
