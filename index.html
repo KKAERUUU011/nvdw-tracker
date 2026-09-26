@@ -122,18 +122,33 @@
   .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--paper); font-weight:500;}
   .btn.small{padding:8px; font-size:12px;}
 
-  table.log{width:100%; border-collapse:collapse; font-size:12px;}
-  table.log th{
-    text-align:left; color:var(--muted); font-weight:500; font-size:10px; letter-spacing:0.04em;
-    padding:6px 8px; border-bottom:1px solid var(--line); text-transform:uppercase;
+  .log-sort{display:flex; gap:6px; margin-bottom:10px;}
+  .sort-btn{
+    padding:6px 12px; border-radius:8px; font-size:11px; background:var(--surface);
+    border:1px solid var(--line); color:var(--muted); cursor:pointer;
   }
-  table.log td{padding:8px; border-bottom:1px solid var(--line); font-family:var(--mono); vertical-align:top;}
-  table.log tr:last-child td{border-bottom:none;}
-  .kind-tag{font-size:9px; padding:2px 6px; border-radius:5px; font-family:var(--sans); letter-spacing:0.02em;}
+  .sort-btn.active{background:var(--copper-soft); color:var(--copper); border-color:#5a3d2c; font-weight:700;}
+
+  .log-list{display:flex; flex-direction:column;}
+  .log-row{padding:10px 4px; border-bottom:1px solid var(--line);}
+  .log-row:last-child{border-bottom:none;}
+  .log-row-top{display:flex; align-items:center; gap:8px;}
+  .log-date{font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
+  .log-content{
+    font-family:var(--mono); font-size:12.5px; margin-top:4px; padding-left:1px;
+    word-break:break-word;
+  }
+  .kind-tag{
+    font-size:9.5px; padding:3px 7px; border-radius:5px; font-family:var(--sans);
+    letter-spacing:0.02em; white-space:nowrap; flex-shrink:0;
+  }
   .kind-buy{background:#213244; color:#7fb0e0;}
   .kind-dist{background:var(--copper-soft); color:var(--copper);}
   .kind-nav{background:#25302a; color:#6fae95;}
-  .del-btn{background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:0 4px;}
+  .del-btn{
+    background:none; border:none; color:var(--muted); font-size:15px; cursor:pointer;
+    padding:0 2px; margin-left:auto; flex-shrink:0;
+  }
   .empty{text-align:center; color:var(--muted); font-size:12px; padding:24px 0;}
 
   .post-box{
@@ -210,19 +225,19 @@
   <section>
     <div class="section-head">
       <h2>週次配当カレンダー</h2>
-      <span class="hint">NVDWは毎週分配 — 濃いほど高額</span>
+      <span class="hint">濃いほど1口あたりの分配額が高い</span>
     </div>
     <div class="payday-scroll">
       <div class="payday-grid" id="paydayGrid"></div>
     </div>
     <div class="payday-legend">
-      <span>少</span>
+      <span id="paydayLegendMin">少</span>
       <span class="sw" style="background:var(--surface-2); border:1px solid var(--line);"></span>
       <span class="sw" style="background:#3a2a1e;"></span>
       <span class="sw" style="background:#6b3f21;"></span>
       <span class="sw" style="background:#a2531f;"></span>
       <span class="sw" style="background:var(--copper);"></span>
-      <span>多</span>
+      <span id="paydayLegendMax">多</span>
     </div>
   </section>
 
@@ -293,11 +308,12 @@
       <h2>記録一覧</h2>
       <span class="hint" id="logCount">0件</span>
     </div>
-    <div class="form" style="padding:6px;">
-      <table class="log" id="logTable">
-        <thead><tr><th>日付</th><th>種別</th><th>内容</th><th></th></tr></thead>
-        <tbody id="logBody"></tbody>
-      </table>
+    <div class="log-sort">
+      <div class="sort-btn active" data-sort="date">日付順</div>
+      <div class="sort-btn" data-sort="kind">種別順</div>
+    </div>
+    <div class="form" style="padding:4px 10px;">
+      <div class="log-list" id="logList"></div>
       <div class="empty" id="logEmpty">まだ記録がありません</div>
     </div>
   </section>
@@ -409,39 +425,49 @@ function renderSummary(){
 function renderPayday(){
   const grid = document.getElementById('paydayGrid');
   grid.innerHTML = '';
+  const legendMin = document.getElementById('paydayLegendMin');
+  const legendMax = document.getElementById('paydayLegendMax');
   if(state.dists.length===0){
     const p = document.createElement('div');
     p.style.cssText='font-size:11px;color:var(--muted);padding:20px 0;';
     p.textContent = '分配金を記録すると週次カレンダーが表示されます';
     grid.appendChild(p);
+    legendMin.textContent = '少';
+    legendMax.textContent = '多';
     return;
   }
   const sorted = [...state.dists].sort((a,b)=>a.date.localeCompare(b.date));
   const start = new Date(sorted[0].date);
   const startSun = new Date(start); startSun.setDate(start.getDate()-start.getDay());
   const end = new Date(); // through today
-  const totalsByWeekStart = {};
+  // 1口あたりの分配額(perShare)を週ごとに集計 — 保有口数の変動に左右されない目安値
+  const perShareByWeekStart = {};
   sorted.forEach(d=>{
     const dt = new Date(d.date);
     const sun = new Date(dt); sun.setDate(dt.getDate()-dt.getDay());
     const key = sun.toISOString().slice(0,10);
-    totalsByWeekStart[key] = (totalsByWeekStart[key]||0) + Number(d.perShare)*Number(d.shares);
+    perShareByWeekStart[key] = (perShareByWeekStart[key]||0) + Number(d.perShare);
   });
-  const values = Object.values(totalsByWeekStart);
+  const values = Object.values(perShareByWeekStart);
+  const min = values.length ? Math.min(...values) : 0;
   const max = values.length ? Math.max(...values) : 0;
+  const range = (max-min)||1;
   function levelFor(v){
     if(!v) return 0;
-    const r = v/max;
+    const r = (v-min)/range;
     if(r>0.75) return 4;
     if(r>0.5) return 3;
     if(r>0.25) return 2;
     return 1;
   }
+  legendMin.textContent = `$${fmt4(min)}`;
+  legendMax.textContent = `$${fmt4(max)}`;
+
   let cursor = new Date(startSun);
   const cells = [];
   while(cursor <= end){
     const key = cursor.toISOString().slice(0,10);
-    const val = totalsByWeekStart[key]||0;
+    const val = perShareByWeekStart[key]||0;
     cells.push({date:key, val});
     cursor.setDate(cursor.getDate()+7);
   }
@@ -449,7 +475,7 @@ function renderPayday(){
     const cell = document.createElement('div');
     cell.className='payday-cell';
     cell.setAttribute('data-level', levelFor(c.val));
-    cell.title = c.val ? `週${c.date}〜: $${fmt2(c.val)}` : `週${c.date}〜: 分配なし`;
+    cell.title = c.val ? `週${c.date}〜: 1口あたり $${fmt4(c.val)}` : `週${c.date}〜: 分配なし`;
     grid.appendChild(cell);
   });
   grid.parentElement.scrollLeft = grid.scrollWidth;
@@ -526,33 +552,52 @@ function getCss(varName){
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
 
-/* ---------- log table ---------- */
+/* ---------- log list ---------- */
+let logSortMode = 'date';
+const kindOrder = {buy:0, dist:1, nav:2};
+const kindLabel = {buy:'購入', dist:'分配', nav:'基準価額'};
+const kindClass = {buy:'kind-buy', dist:'kind-dist', nav:'kind-nav'};
+
 function renderLog(){
-  const body = document.getElementById('logBody');
-  body.innerHTML='';
+  const list = document.getElementById('logList');
+  list.innerHTML='';
   const rows = [
     ...state.buys.map(b=>({date:b.date, kind:'buy', id:b.id, text:`${fmt4(b.shares)}口 @ $${fmt2(b.price)}${b.fee?` (手数料$${fmt2(b.fee)})`:''}`})),
     ...state.dists.map(d=>({date:d.date, kind:'dist', id:d.id, text:`$${fmt4(d.perShare)}/口 × ${fmt4(d.shares)}口 = $${fmt2(d.perShare*d.shares)}`})),
     ...state.navs.map(n=>({date:n.date, kind:'nav', id:n.id, text:`基準価額 $${fmt2(n.price)}`})),
-  ].sort((a,b)=>b.date.localeCompare(a.date));
+  ];
+
+  if(logSortMode === 'kind'){
+    rows.sort((a,b)=> kindOrder[a.kind]-kindOrder[b.kind] || b.date.localeCompare(a.date));
+  } else {
+    rows.sort((a,b)=> b.date.localeCompare(a.date));
+  }
 
   document.getElementById('logCount').textContent = `${rows.length}件`;
   document.getElementById('logEmpty').style.display = rows.length? 'none':'block';
 
-  const kindLabel = {buy:'購入', dist:'分配', nav:'基準価額'};
-  const kindClass = {buy:'kind-buy', dist:'kind-dist', nav:'kind-nav'};
-
   rows.forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${r.date}</td>
-      <td><span class="kind-tag ${kindClass[r.kind]}">${kindLabel[r.kind]}</span></td>
-      <td>${r.text}</td>
-      <td><button class="del-btn" onclick="deleteEntry('${r.kind}','${r.id}')">✕</button></td>
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `
+      <div class="log-row-top">
+        <span class="log-date">${r.date}</span>
+        <span class="kind-tag ${kindClass[r.kind]}">${kindLabel[r.kind]}</span>
+        <button class="del-btn" onclick="deleteEntry('${r.kind}','${r.id}')">✕</button>
+      </div>
+      <div class="log-content">${r.text}</div>
     `;
-    body.appendChild(tr);
+    list.appendChild(row);
   });
 }
+document.querySelectorAll('.sort-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    logSortMode = btn.dataset.sort;
+    renderLog();
+  });
+});
 function deleteEntry(kind, id){
   const map = {buy:'buys', dist:'dists', nav:'navs'};
   state[map[kind]] = state[map[kind]].filter(x=>x.id!==id);
