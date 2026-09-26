@@ -190,14 +190,14 @@
 
   <div class="cards">
     <div class="card">
-      <div class="label">保有口数</div>
-      <div class="value" id="sumShares">0.000</div>
+      <div class="label">保有株数</div>
+      <div class="value" id="sumShares">0</div>
       <div class="sub" id="sumSharesUsd">$0.00 取得</div>
     </div>
     <div class="card">
       <div class="label">平均取得単価</div>
       <div class="value" id="sumAvgCost">$0.00</div>
-      <div class="sub" id="sumLatestNav">直近基準価額 —</div>
+      <div class="sub" id="sumLatestNav">直近株価 —</div>
     </div>
     <div class="card">
       <div class="label">評価損益</div>
@@ -225,7 +225,7 @@
   <section>
     <div class="section-head">
       <h2>週次配当カレンダー</h2>
-      <span class="hint">濃いほど1口あたりの分配額が高い</span>
+      <span class="hint">濃いほど1株あたりの分配額が高い</span>
     </div>
     <div class="payday-scroll">
       <div class="payday-grid" id="paydayGrid"></div>
@@ -243,7 +243,7 @@
 
   <section>
     <div class="section-head">
-      <h2>基準価額の推移</h2>
+      <h2>株価の推移</h2>
       <span class="hint">タップ点 = 分配日</span>
     </div>
     <canvas id="navChart" width="600" height="360"></canvas>
@@ -254,14 +254,14 @@
     <div class="tabs">
       <div class="tab active" data-panel="panelBuy">購入</div>
       <div class="tab" data-panel="panelDist">分配金</div>
-      <div class="tab" data-panel="panelNav">基準価額</div>
+      <div class="tab" data-panel="panelNav">株価</div>
     </div>
 
     <div class="panel active" id="panelBuy">
       <div class="form">
         <div class="field"><label>購入日</label><input type="date" id="buyDate"></div>
         <div class="row2">
-          <div class="field"><label>口数(株)</label><input type="number" id="buyShares" step="0.0001" placeholder="10"></div>
+          <div class="field"><label>株数</label><input type="number" id="buyShares" step="1" inputmode="numeric" placeholder="10"></div>
           <div class="field"><label>単価(USD)</label><input type="number" id="buyPrice" step="0.01" placeholder="33.50"></div>
         </div>
         <div class="field"><label>手数料(USD・任意)</label><input type="number" id="buyFee" step="0.01" placeholder="0"></div>
@@ -273,8 +273,8 @@
       <div class="form">
         <div class="field"><label>分配日</label><input type="date" id="distDate"></div>
         <div class="row2">
-          <div class="field"><label>1口あたり分配金(USD)</label><input type="number" id="distPerShare" step="0.0001" placeholder="0.42"></div>
-          <div class="field"><label>受取口数</label><input type="number" id="distShares" step="0.0001" placeholder="自動: 保有口数"></div>
+          <div class="field"><label>1株あたり分配金(USD)</label><input type="number" id="distPerShare" step="0.0001" placeholder="0.42"></div>
+          <div class="field"><label>受取株数</label><input type="number" id="distShares" step="1" inputmode="numeric" placeholder="自動: 保有株数"></div>
         </div>
         <button class="btn" onclick="addDist()">分配金を記録</button>
       </div>
@@ -283,8 +283,8 @@
     <div class="panel" id="panelNav">
       <div class="form">
         <div class="field"><label>更新日</label><input type="date" id="navDate"></div>
-        <div class="field"><label>基準価額(USD)</label><input type="number" id="navPrice" step="0.01" placeholder="34.00"></div>
-        <button class="btn" onclick="addNav()">基準価額を記録</button>
+        <div class="field"><label>株価(USD)</label><input type="number" id="navPrice" step="0.01" placeholder="34.00"></div>
+        <button class="btn" onclick="addNav()">株価を記録</button>
       </div>
     </div>
   </section>
@@ -349,6 +349,7 @@ let state = loadData();
 /* ---------- helpers ---------- */
 const fmt2 = n => (Math.round(n*100)/100).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmt4 = n => (Math.round(n*10000)/10000).toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4});
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 
@@ -374,14 +375,14 @@ function totalDist(){
 /* ---------- rendering: summary ---------- */
 function renderSummary(){
   const sh = totalShares();
-  document.getElementById('sumShares').textContent = fmt4(sh);
+  document.getElementById('sumShares').textContent = fmtInt(sh);
   document.getElementById('sumSharesUsd').textContent = `$${fmt2(totalCost())} 取得`;
 
   const ac = avgCost();
   document.getElementById('sumAvgCost').textContent = sh>0 ? `$${fmt2(ac)}` : '—';
 
   const nav = latestNav();
-  document.getElementById('sumLatestNav').textContent = nav ? `直近基準価額 $${fmt2(nav.price)} (${nav.date})` : '直近基準価額 —';
+  document.getElementById('sumLatestNav').textContent = nav ? `直近株価 $${fmt2(nav.price)} (${nav.date})` : '直近株価 —';
 
   const pnlEl = document.getElementById('sumPnl');
   const pnlPctEl = document.getElementById('sumPnlPct');
@@ -394,7 +395,7 @@ function renderSummary(){
     pnlPctEl.textContent = (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%';
   } else {
     pnlEl.textContent = '—'; pnlEl.className='value';
-    pnlPctEl.textContent = '評価には基準価額の登録が必要';
+    pnlPctEl.textContent = '評価には株価の登録が必要';
   }
 
   document.getElementById('sumDist').textContent = `$${fmt2(totalDist())}`;
@@ -415,7 +416,7 @@ function renderSummary(){
     const jpy = nav.price*sh*Number(fx);
     jpyPrev.textContent = `評価額(円換算): ¥${Math.round(jpy).toLocaleString('ja-JP')}`;
   } else if(fx && sh>0){
-    jpyPrev.textContent = `為替のみ設定済(基準価額未登録)`;
+    jpyPrev.textContent = `為替のみ設定済(株価未登録)`;
   } else {
     jpyPrev.textContent = '— 評価額(円換算): —';
   }
@@ -440,7 +441,7 @@ function renderPayday(){
   const start = new Date(sorted[0].date);
   const startSun = new Date(start); startSun.setDate(start.getDate()-start.getDay());
   const end = new Date(); // through today
-  // 1口あたりの分配額(perShare)を週ごとに集計 — 保有口数の変動に左右されない目安値
+  // 1株あたりの分配額(perShare)を週ごとに集計 — 保有株数の変動に左右されない目安値
   const perShareByWeekStart = {};
   sorted.forEach(d=>{
     const dt = new Date(d.date);
@@ -475,7 +476,7 @@ function renderPayday(){
     const cell = document.createElement('div');
     cell.className='payday-cell';
     cell.setAttribute('data-level', levelFor(c.val));
-    cell.title = c.val ? `週${c.date}〜: 1口あたり $${fmt4(c.val)}` : `週${c.date}〜: 分配なし`;
+    cell.title = c.val ? `週${c.date}〜: 1株あたり $${fmt4(c.val)}` : `週${c.date}〜: 分配なし`;
     grid.appendChild(cell);
   });
   grid.parentElement.scrollLeft = grid.scrollWidth;
@@ -495,7 +496,7 @@ function renderChart(){
   if(navs.length===0){
     ctx.fillStyle = getCss('--muted');
     ctx.font='12px sans-serif';
-    ctx.fillText('基準価額を記録するとグラフが表示されます', pad.l, H/2);
+    ctx.fillText('株価を記録するとグラフが表示されます', pad.l, H/2);
     return;
   }
   const prices = navs.map(n=>Number(n.price));
@@ -555,16 +556,16 @@ function getCss(varName){
 /* ---------- log list ---------- */
 let logSortMode = 'date';
 const kindOrder = {buy:0, dist:1, nav:2};
-const kindLabel = {buy:'購入', dist:'分配', nav:'基準価額'};
+const kindLabel = {buy:'購入', dist:'分配', nav:'株価'};
 const kindClass = {buy:'kind-buy', dist:'kind-dist', nav:'kind-nav'};
 
 function renderLog(){
   const list = document.getElementById('logList');
   list.innerHTML='';
   const rows = [
-    ...state.buys.map(b=>({date:b.date, kind:'buy', id:b.id, text:`${fmt4(b.shares)}口 @ $${fmt2(b.price)}${b.fee?` (手数料$${fmt2(b.fee)})`:''}`})),
-    ...state.dists.map(d=>({date:d.date, kind:'dist', id:d.id, text:`$${fmt4(d.perShare)}/口 × ${fmt4(d.shares)}口 = $${fmt2(d.perShare*d.shares)}`})),
-    ...state.navs.map(n=>({date:n.date, kind:'nav', id:n.id, text:`基準価額 $${fmt2(n.price)}`})),
+    ...state.buys.map(b=>({date:b.date, kind:'buy', id:b.id, text:`${fmtInt(b.shares)}株 @ $${fmt2(b.price)}${b.fee?` (手数料$${fmt2(b.fee)})`:''}`})),
+    ...state.dists.map(d=>({date:d.date, kind:'dist', id:d.id, text:`$${fmt4(d.perShare)}/株 × ${fmtInt(d.shares)}株 = $${fmt2(d.perShare*d.shares)}`})),
+    ...state.navs.map(n=>({date:n.date, kind:'nav', id:n.id, text:`株価 $${fmt2(n.price)}`})),
   ];
 
   if(logSortMode === 'kind'){
@@ -608,10 +609,10 @@ function deleteEntry(kind, id){
 /* ---------- add entries ---------- */
 function addBuy(){
   const date = document.getElementById('buyDate').value || todayStr();
-  const shares = Number(document.getElementById('buyShares').value);
+  const shares = Math.round(Number(document.getElementById('buyShares').value));
   const price = Number(document.getElementById('buyPrice').value);
   const fee = Number(document.getElementById('buyFee').value||0);
-  if(!shares || !price){ showToast('口数と単価を入力してください'); return; }
+  if(!shares || !price){ showToast('株数と単価を入力してください'); return; }
   state.buys.push({id:uid(), date, shares, price, fee});
   saveData();
   document.getElementById('buyShares').value='';
@@ -624,8 +625,8 @@ function addDist(){
   const date = document.getElementById('distDate').value || todayStr();
   const perShare = Number(document.getElementById('distPerShare').value);
   const sharesInput = document.getElementById('distShares').value;
-  const shares = sharesInput ? Number(sharesInput) : totalShares();
-  if(!perShare || !shares){ showToast('1口あたり分配金を入力してください'); return; }
+  const shares = sharesInput ? Math.round(Number(sharesInput)) : totalShares();
+  if(!perShare || !shares){ showToast('1株あたり分配金を入力してください'); return; }
   state.dists.push({id:uid(), date, perShare, shares});
   saveData();
   document.getElementById('distPerShare').value='';
@@ -636,12 +637,12 @@ function addDist(){
 function addNav(){
   const date = document.getElementById('navDate').value || todayStr();
   const price = Number(document.getElementById('navPrice').value);
-  if(!price){ showToast('基準価額を入力してください'); return; }
+  if(!price){ showToast('株価を入力してください'); return; }
   const existing = state.navs.find(n=>n.date===date);
   if(existing){ existing.price = price; } else { state.navs.push({id:uid(), date, price}); }
   saveData();
   document.getElementById('navPrice').value='';
-  showToast('基準価額を記録しました');
+  showToast('株価を記録しました');
   renderAll();
 }
 
@@ -654,12 +655,12 @@ function buildPost(){
   const lines = [];
   lines.push(`【NVDW週次記録】`);
   if(lastDist){
-    lines.push(`分配金: $${fmt4(lastDist.perShare)}/口 (${lastDist.date})`);
+    lines.push(`分配金: $${fmt4(lastDist.perShare)}/株 (${lastDist.date})`);
   }
   if(nav){
-    lines.push(`基準価額: $${fmt2(nav.price)} (${nav.date})`);
+    lines.push(`株価: $${fmt2(nav.price)} (${nav.date})`);
   }
-  lines.push(`保有: ${fmt4(sh)}口 / 平均取得単価 $${fmt2(avgCost())}`);
+  lines.push(`保有: ${fmtInt(sh)}株 / 平均取得単価 $${fmt2(avgCost())}`);
   if(nav && sh>0){
     const pnl = nav.price*sh - totalCost();
     const pnlPct = totalCost()>0 ? pnl/totalCost()*100 : 0;
